@@ -1,0 +1,12 @@
+{
+  "name": "sml-toolkit",
+  "description": "General-purpose developer toolkit for AI coding agents",
+  "version": "0.1.0",
+  "author": {
+    "name": "Super Mega Lab"
+  },
+  "homepage": "https://github.com/super-mega-lab/toolkit",
+  "repository": "https://github.com/super-mega-lab/toolkit",
+  "license": "MIT",
+  "keywords": ["skills", "developer-tools", "productivity"]
+}
