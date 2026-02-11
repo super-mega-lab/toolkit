@@ -39,7 +39,7 @@ Or install directly:
 
 | Skill | Description |
 |-------|-------------|
-| *Coming soon* | |
+| [enhance-linear-issues](skills/enhance-linear-issues/) | Review, enhance, and decompose Linear issues with clearer writing, better structure, and actionable detail |
 
 ## License
 
