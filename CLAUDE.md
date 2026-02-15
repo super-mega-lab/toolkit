@@ -20,16 +20,14 @@ hooks/              # Hook definitions (empty — .gitkeep)
 
 **Skills** are the primary content type. Each skill lives in `skills/<skill-name>/` and is defined by a `SKILL.md` file with YAML frontmatter (`name`, `description`) followed by the full prompt/instructions the agent receives when the skill is invoked.
 
-Skills can have `references/` subdirectories containing calibration guides and criteria documents that subagents read at runtime.
-
 **Plugin config** in `.claude-plugin/plugin.json` defines the package metadata. Version must be kept in sync across `plugin.json` and `marketplace.json`.
 
 ## Current Skills
 
-- **enhance-linear-issues**: Reviews and enhances Linear issues via the Linear MCP server. Uses parallel subagent dispatch (one per issue), quality calibration scales, safety checks, and auto/preview modes. References in `skills/enhance-linear-issues/references/`.
+- **enhance-linear-issues**: Reviews and enhances Linear issues via the Linear MCP server. Uses single-agent sequential processing for ≤10 issues, with parallel subagent dispatch as fallback for larger batches. Calibration scales and decomposition criteria are inlined in the SKILL.md.
 
 ## Development Notes
 
 - No build step, no test framework, no linter — this is a content-driven plugin (markdown + JSON).
-- Changes to skill behavior are made by editing SKILL.md files and their reference documents.
+- Changes to skill behavior are made by editing SKILL.md files.
 - The `enhance-linear-issues` skill has a version number in its SKILL.md that controls idempotency (the "already processed" filter). Bump it when making behavioral changes.

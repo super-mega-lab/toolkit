@@ -5,7 +5,7 @@ description: Use when asked to review, enhance, improve, clean up, decompose, or
 
 # Enhance Linear Issues
 
-**Version: 1** — This is the single source of truth for the skill version. All version references below mean this value.
+**Version: 2** — This is the single source of truth for the skill version. All version references below mean this value.
 
 ## Overview
 
@@ -23,6 +23,19 @@ Use this skill when the user mentions Linear issues **and** wants them reviewed,
 
 **NOT for:** Creating new issues from scratch, triaging, or status updates.
 
+## Linear MCP Tools
+
+Load all needed tools with a single ToolSearch call: `+linear`. Tools used by this skill:
+
+- `list_teams` — list workspace teams
+- `list_projects` — list workspace projects
+- `list_issues` — list/filter issues
+- `get_issue` — get issue details (supports `includeRelations`)
+- `list_comments` — get issue comments
+- `extract_images` — extract and view images from issue descriptions
+- `update_issue` — update issue fields
+- `create_issue` — create new issues (for decomposition)
+
 ## Workflow
 
 ```
@@ -31,7 +44,7 @@ Enhancement Progress:
 - [ ] Step 2: Issues gathered, workspace context loaded
 - [ ] Step 3: Scope confirmed with user
 - [ ] Step 4: Already-processed issues filtered
-- [ ] Step 5: Sub-tasks dispatched
+- [ ] Step 5: Issues processed
 - [ ] Step 6: Proposals collected and presented
 - [ ] Step 7: Safety review complete
 - [ ] Step 8: Approval obtained
@@ -120,47 +133,43 @@ Before dispatching sub-tasks, check each issue's description for `_Last enhanced
 
 This avoids redundant processing when re-running the skill on the same batch.
 
-#### Step 5: Dispatch Sub-Tasks for Analysis
+#### Step 5: Process Issues
 
-**CRITICAL:** Dispatch a separate parallel sub-task for each issue. This prevents context degradation when processing many issues.
+Choose a processing strategy based on batch size:
 
-Each sub-task receives:
-- The issue ID
-- Workspace context (teams, projects)
-- All other issue IDs in the batch (for cross-linking)
-- Instructions to follow the Sub-Task Enhancement Process below
+**Small batches (≤10 issues):** Process each issue sequentially in the current agent using the Enhancement Process below. Context (tools, calibration criteria, workspace info) loads once and is reused across all issues.
+
+**Large batches (>10 issues):** Dispatch a separate parallel sub-task for each issue to prevent context degradation. Each sub-task prompt must include:
+- The issue ID and the Enhancement Process steps below
+- The full Enhancement Calibration and Decomposition Criteria sections from this skill
+- The Guard Rails, Linking Rules, and Enhancement Footer sections
+- Dynamic context: workspace slug, repo browse URL, team list, project list, batch issue list
 
 Launch sub-tasks in parallel where possible.
 
-### Sub-Task Enhancement Process
+### Enhancement Process
 
-**Sub-task instructions template:**
+For each issue (whether processed inline or via sub-task):
 
-```
-Enhance Linear issue [ISSUE-ID].
-
-## Your task
-1. Fetch the issue with Linear:get_issue (include relations)
-2. Fetch comments with Linear:list_comments
-3. Read the enhancement calibration reference at [skill base dir]/references/enhancement-calibration.md
-4. Assess issue quality using the calibration scale
-5. If quality is Excellent, add enhancement footer and report, but make no content changes
-6. Identify issue type (bug/feature/task)
-7. Gather context:
-   - If issue has images in description, use Linear:extract_images to view them, then describe what they show
+1. Fetch the issue with `Linear:get_issue` (include relations)
+2. Fetch comments with `Linear:list_comments`
+3. Assess issue quality using the Enhancement Calibration scale (see below)
+4. If quality is Excellent, add enhancement footer and report, but make no content changes
+5. Identify issue type (bug/feature/task)
+6. Gather context:
+   - If issue has images in description, use `Linear:extract_images` to view them, then describe what they show
    - If screenshot analysis fails, note "Screenshot attached (not analyzed)" — do NOT guess content
-   - Search for related issues among: [list of other issue IDs in batch]
-   - Search for related issues via Linear:list_issues with similar terms
+   - Search for related issues among other issue IDs in the batch
+   - Search for related issues via `Linear:list_issues` with similar terms
    - If issue mentions a feature/bug area, check project documentation and relevant source files
    - Verify all code references before citing them
-8. Read decomposition criteria at [skill base dir]/references/decomposition-criteria.md
-9. Evaluate whether this issue should be decomposed into sub-issues
-10. Check if the issue's team assignment makes sense given available teams: [team list]
-11. Draft enhanced title and description (calibrated to quality gap)
-12. Run safety checks (see Safety Review section)
-13. Return results in the output format specified below
+7. Evaluate whether this issue should be decomposed (see Decomposition Criteria below)
+8. Check if the issue's team assignment makes sense given available teams
+9. Draft enhanced title and description (calibrated to quality gap)
+10. Run safety checks (see Safety Review section)
+11. Return results in the Output Format specified below
 
-## Linking Rules
+#### Linking Rules
 
 Use these URL patterns for all references in descriptions:
 - **Issues**: `https://linear.app/WORKSPACE_SLUG/issue/ISSUE-ID` — WORKSPACE_SLUG: [dynamic]
@@ -168,31 +177,18 @@ Use these URL patterns for all references in descriptions:
 - **Documents**: `REPO_BROWSE_URL/path/to/document`
 - If slugs/URLs are unavailable, fall back to plain text
 
-## Enhancement Footer
+#### Enhancement Footer
 
 ALWAYS append a single footer line to the description, even for NoChangesNeeded issues. Format:
 
     _Last enhanced: v[VERSION], [ISO-8601-TIMESTAMP]_
 
-Example: `_Last enhanced: v1, 2024-01-15T12:00:00Z_`
+Example: `_Last enhanced: v2, 2024-01-15T12:00:00Z_`
 
 Rules:
 - If description already has a `_Last enhanced:` line, replace it (never duplicate)
 - Remove any old-format blocks (`<enhance-linear-issues>`, `<EnhanceLinearSkills>`) during enhancement
 - Use the current version number and UTC timestamp
-
-## Available teams
-[dynamic team list]
-
-## Available projects
-[dynamic project list]
-
-## Other issues in this batch (for cross-linking)
-[dynamic issue list with titles]
-
-## Guard Rails — follow these strictly
-[Include full Guard Rails section]
-```
 
 ### Phase 2 — Review and Apply
 
@@ -288,10 +284,119 @@ For each issue, report under a `## TEAM-XXX: [Title]` heading:
 - **Safety check**: PASS or FLAG with explanation
 - **Changes summary**: what changed and why
 
-## Calibration and Decomposition References
+## Enhancement Calibration
 
-Enhancement calibration (quality scales, issue-type guidance, common mistakes, examples):
-→ Read `references/enhancement-calibration.md`
+### Quality Assessment Scale
 
-Decomposition criteria (when to decompose, when not to, examples):
-→ Read `references/decomposition-criteria.md`
+| Current Quality | Enhancement Level | What It Looks Like |
+|-----------------|-------------------|--------------------|
+| **Excellent** (structured, clear, actionable) | NoChangesNeeded | Has Problem/Expected/Criteria sections, code refs, links |
+| **Good** (clear intent, some structure) | LightTouch: grammar, minor clarity | Fix typos, preserve author's structure |
+| **Medium** (understandable but sparse) | Moderate: add structure, clarify | Add sections, expand terse points |
+| **Poor** (screenshot + few sentences) | Significant: full restructure | Add Problem/Causes/Investigation sections |
+
+### By Issue Type
+
+**Bug Issues** benefit from:
+- Problem statement (what's broken, where)
+- Reproduction steps (if known or inferable)
+- Expected vs actual behavior
+- Investigation pointers (relevant files/functions — verified only)
+- Possible causes (if codebase context helps)
+
+**Feature Issues** benefit from:
+- Clear description of desired outcome
+- Reasoning/motivation (preserve if present)
+- Acceptance criteria (if straightforward to infer)
+- **NOT** implementation specs unless issue is clearly meant to be a spec
+
+**Task Issues** benefit from:
+- Clear definition of done
+- Context links (related issues, docs)
+
+### Common Mistakes
+
+| Mistake | Example | Fix |
+|---------|---------|-----|
+| Over-enhancement | Turning feature request into implementation spec | Match enhancement to issue type |
+| Lost personality | Removing casual language | Only fix actual grammar errors |
+| Hallucinated details | "See line 165 in foo.ts" (wrong) | Verify every code reference |
+| Scope creep | Adding "Out of Scope" sections to simple issues | Keep additions proportional |
+| Template forcing | Every issue gets Problem/Expected/Criteria | Adapt structure to issue type |
+| Description inflation | Adding filler text that doesn't add information | Every added sentence must carry new signal |
+
+### Calibration Examples
+
+**Poor issue (bug report) — Significant enhancement:**
+
+Before: Title "Data export broken:" / Description: [screenshot] "Noticed this happening a few times. Maybe we should add validation?"
+
+Appropriate: Fix trailing colon in title. Add Problem/Possible Causes/Investigation structure. Add verified file paths. Describe screenshot. Add footer.
+
+**Good issue (feature request) — LightTouch:**
+
+Before: Well-reasoned feature request with screenshots and flexibility notes like "feel free to simplify if needed"
+
+Appropriate: Fix typos. Light restructure with headers IF it helps readability. Preserve flexibility language. Do NOT add implementation details. Add footer.
+
+**Excellent issue — NoChangesNeeded:**
+
+Before: Structured with Problem, Root Cause, Solution, Tasks, References sections. Includes exact error codes, code snippets, and documentation links.
+
+Appropriate: Add enhancement footer only. No content changes. Note in report why: "Already excellent — structured with problem/cause/solution, includes code examples and references."
+
+## Decomposition Criteria
+
+### When to Decompose
+
+Decompose when **ALL** of these are true:
+1. Issue describes 2+ distinct deliverables (not just sequential steps of one task)
+2. Each deliverable is independently verifiable
+3. Parallel work OR incremental delivery has clear value
+
+### When NOT to Decompose
+
+Do NOT decompose when ANY of these are true:
+- Issue is a single coherent task (even if multi-step)
+- Steps are sequential and tightly coupled (step 2 can't start without step 1's output)
+- Total effort is small (< 1 day of work)
+- Issue is already a sub-issue (don't nest further without strong justification)
+- Issue author explicitly notes it should stay as one unit
+
+### Decomposition Implementation
+
+When decomposing:
+1. Original issue becomes the **parent**
+2. Create sub-issues with `parentId` pointing to the original
+3. Update original description to reference children and serve as an overview
+4. Each sub-issue gets its own clear scope and acceptance criteria
+5. Preserve the original issue's labels and priority on children
+
+### Decomposition Examples
+
+**DECOMPOSE — Multi-deliverable feature:**
+"Add label support — create label management UI, add label picker to annotations, add label filtering to views"
+→ Three distinct deliverables, each independently verifiable, can be worked in parallel.
+
+**DON'T DECOMPOSE — Sequential, coupled steps:**
+"Fix advisory lock timeout — add DIRECT_DATABASE_URL env var, update prisma.config.ts to use directUrl, optionally increase lock timeout"
+→ Steps are tightly sequential. Single coherent fix for one root cause.
+
+**DON'T DECOMPOSE — Single task with multiple aspects:**
+"Grouping expansions have repeated text — might need post-LLM scrubbing or prompt tweaks"
+→ One problem, one investigation. Alternative approaches to the same fix.
+
+**DECOMPOSE — Bug affecting multiple systems:**
+"Dark mode colors are wrong — sidebar uses hardcoded colors, concept tree doesn't respect theme, settings page has white backgrounds"
+→ Three independent UI areas, each independently fixable and verifiable.
+
+**DON'T DECOMPOSE — Small task:**
+"Update the logo on the landing page and in the sidebar"
+→ Two instances of the same trivial change. Less than an hour of work.
+
+### Recommendation Confidence
+
+When proposing decomposition, state confidence:
+- **High confidence:** Clear multiple deliverables, obvious parallel value
+- **Medium confidence:** Could go either way — present reasoning, let user decide
+- **Low confidence:** Lean toward keeping together — mention as possibility but recommend against
