@@ -17,10 +17,6 @@ Enhance hastily-written Linear issues with clearer writing, better structure, an
 
 ## When to Use
 
-Use this skill when the user mentions Linear issues **and** wants them reviewed, enhanced, improved, cleaned up, decomposed, or organized.
-
-**Trigger phrases:** "enhance issues", "review my issues", "clean up", "improve issue quality", "break down this issue", "decompose", "organize issues"
-
 **NOT for:** Creating new issues from scratch, triaging, or status updates.
 
 ## Linear MCP Tools
@@ -56,9 +52,7 @@ Enhancement Progress:
 #### Step 1: Announce and Select Mode
 
 1. Display: `🎫 enhance-linear-issues v[current version]`
-2. **Check prerequisites** (run in parallel):
-   - **Linear MCP**: Call `Linear:list_teams`. If the tool is unavailable or the call fails, stop with: "Linear MCP server is required but not available. Ensure the Linear MCP server is configured in your agent's MCP settings."
-   - **Git**: Run `git --version` in the shell. If it fails, note that file linking will be unavailable (the skill can still enhance issues without repo links). Include this in the scope summary.
+2. **Check git prerequisite**: Run `git --version`. If it fails, note that file linking will be unavailable. Include this in the scope summary.
 3. Detect mode from user's request:
    - **Auto** (no trigger needed): Runs end-to-end without prompts. Auto-applies all proposals that pass safety review. Flagged proposals are skipped (not applied) and reported.
    - **Preview** (opt-in): Runs the full analysis pipeline without prompts, then presents results for review before applying.
@@ -80,25 +74,15 @@ If mode is ambiguous, default to auto.
 If `Linear:list_issues` returns paginated results, fetch all pages to build the complete issue set before proceeding.
 
 **B. Discover workspace context:**
-- `Linear:list_teams` — fetch all teams (for team reassignment recommendations)
+- `Linear:list_teams` — fetch all teams (for team reassignment). If this call fails, stop with: "Linear MCP server is required but not available. Ensure the Linear MCP server is configured in your agent's MCP settings."
 - `Linear:list_projects` — fetch all projects (for context and linking)
 
 **C. Discover git/repo context** (run in the shell):
-- `git remote get-url origin` → remote URL
-- `git rev-parse --abbrev-ref HEAD` → current branch (fallback: `main`)
-- Parse remote URL to browsable base:
-  - SSH format `git@github.com:org/repo.git` → `https://github.com/org/repo`
-  - HTTPS format `https://github.com/org/repo.git` → `https://github.com/org/repo`
-- Construct `REPO_BROWSE_URL` = `{base_url}/blob/{branch}`
-- If git commands fail, set `REPO_BROWSE_URL` to empty and note that file linking is unavailable
+- Construct `REPO_BROWSE_URL` from `git remote get-url origin` and current branch: `{https-base}/blob/{branch}`
+- If git commands fail, set `REPO_BROWSE_URL` to empty and note file linking is unavailable
 
 **D. Discover workspace slug:**
-- From the first issue fetched in A, extract the `url` field from the `Linear:get_issue` response
-- Parse workspace slug from `https://linear.app/{WORKSPACE_SLUG}/issue/...`
-- Fallback: extract from any Linear URL the user provided
-- If unavailable, issue references will use plain text identifiers
-
-Store all context (workspace, repo, workspace slug) for passing to sub-tasks.
+- Extract `WORKSPACE_SLUG` from any issue's `url` field (e.g., `https://linear.app/{WORKSPACE_SLUG}/issue/...`). If unavailable, fall back to plain text identifiers.
 
 #### Step 3: Confirm Scope
 
@@ -126,10 +110,10 @@ Display scope summary and proceed to analysis.
 
 #### Step 4: Filter Already-Processed Issues
 
-Before dispatching sub-tasks, check each issue's description for `_Last enhanced: v[current version],`:
+Before processing, check each issue's description for `_Last enhanced: v[current version],`:
 - If the version matches **AND** the issue's `updatedAt` timestamp is within ~1 minute of the footer timestamp → **skip** this issue
 - Report: "Already processed by current version, no changes since last run"
-- Otherwise → proceed to sub-task dispatch
+- Otherwise → proceed to Step 5
 
 This avoids redundant processing when re-running the skill on the same batch.
 
@@ -151,7 +135,7 @@ Launch sub-tasks in parallel where possible.
 
 For each issue (whether processed inline or via sub-task):
 
-1. Fetch the issue with `Linear:get_issue` (include relations)
+1. Fetch the issue with `Linear:get_issue` (include relations) — reuse data from Step 2 when available
 2. Fetch comments with `Linear:list_comments`
 3. Assess issue quality using the Enhancement Calibration scale (see below)
 4. If quality is Excellent, add enhancement footer and report, but make no content changes
@@ -194,7 +178,7 @@ Rules:
 
 #### Step 6: Collect and Present Proposals
 
-After all sub-tasks complete, collect their proposals and present a **unified change plan** showing all issues at once:
+After all issues are processed, collect the proposals and present a **unified change plan** showing all issues at once:
 
 ```markdown
 # Enhancement Plan
