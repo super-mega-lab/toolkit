@@ -35,11 +35,11 @@ Or install directly:
 
 ## Skills
 
-<!-- Update this table as you add skills -->
-
 | Skill | Description |
 |-------|-------------|
 | [enhance-linear-issues](skills/enhance-linear-issues/) | Review, enhance, and decompose Linear issues with clearer writing, better structure, and actionable detail |
+| [linear-branch](skills/linear-branch/) | Create a git feature branch from a Linear issue, using a consistent naming convention and setting the issue to In Progress |
+| [linear-worktree](skills/linear-worktree/) | Create an isolated git worktree from a Linear issue, with auto project setup, baseline tests, and the issue set to In Progress |
 
 ## License
 
