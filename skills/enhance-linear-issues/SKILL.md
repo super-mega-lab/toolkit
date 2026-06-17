@@ -112,6 +112,10 @@ Workspace: [WORKSPACE_SLUG or "unavailable"]
 
 Display scope summary and proceed to analysis.
 
+**Rendering (verbatim vs. condensed):** The block above is a format guide, not a verbatim script. In **auto** mode — especially a single-issue run — you may condense it to a sentence or two as long as it still conveys the issues in scope and the repo/workspace context; rendering the literal block is not required. In **preview** mode, render it in full so the user can review scope before anything is applied.
+
+**Backlog-automation caution:** If any issue in scope has a **Backlog** status, add a one-line warning to the scope summary — e.g. `⚠️ Saving a Backlog issue may trip a workspace automation that moves it Backlog→Todo and pulls it into the current cycle.` This is a Linear-side automation, not something the skill sets (it never writes `state`/`cycle` itself); surface it up front so the status change isn't a surprise.
+
 **Batching (>10 issues):**
 - **Auto mode:** Process in batches of 10 automatically. After each batch, report results and continue with the next batch. No prompting.
 - **Preview mode:** Prompt with options: "Process all [N] issues" or "Process in batches of 10."
@@ -291,7 +295,7 @@ For each approved issue:
 
 For each issue, report under a `## TEAM-XXX: [Title]` heading:
 
-- **Quality assessment** and **recommendation** (NoChangesNeeded/LightTouch/Moderate/Significant/Decomposed)
+- **Quality assessment** and **recommendation** — exactly one overall level (NoChangesNeeded/LightTouch/Moderate/Significant/Decomposed), summarizing the whole issue rather than any single field (see Enhancement Calibration)
 - **Title**: current vs proposed (or NO CHANGE)
 - **Description**: current vs proposed (or NO CHANGE)
 - **Sub-issues** (if decomposing): child titles, descriptions, and parent update
@@ -310,6 +314,8 @@ For each issue, report under a `## TEAM-XXX: [Title]` heading:
 | **Good** (clear intent, some structure) | LightTouch: grammar, minor clarity | Fix typos, preserve author's structure |
 | **Medium** (understandable but sparse) | Moderate: add structure, clarify | Add sections, expand terse points |
 | **Poor** (screenshot + few sentences) | Significant: full restructure | Add Problem/Causes/Investigation sections |
+
+**One label per issue, not per field.** The Enhancement Level is a single *overall* assessment of the issue — the dominant treatment it needs — and it is what the Output Format reports as the **recommendation**. Do not attach a second, field-level calibration label that contradicts it: if the issue overall warrants **Significant** enhancement but its title needs only a light touch, say so in prose ("title: minor fix; description: full restructure") rather than tagging the title "LightTouch" under an overall "Significant". Mixed per-field and overall labels read as contradictory.
 
 ### By Issue Type
 
