@@ -53,7 +53,7 @@ Enhancement Progress:
 1. Display: `🎫 enhance-linear-issues v[current version]`
 2. **Check git prerequisite**: Run `git --version`. If it fails, note that file linking will be unavailable. Include this in the scope summary.
 3. Detect mode from user's request:
-   - **Auto** (no trigger needed): Runs end-to-end without prompts. Auto-applies all proposals that pass safety review. Flagged proposals are skipped (not applied) and reported.
+   - **Auto** (no trigger needed): Runs end-to-end without prompts. Auto-applies all proposals that pass safety review. Flagged proposals are skipped (not applied) and reported. **Exception:** creating sub-issues (decomposition) always requires explicit user confirmation first, even in auto mode — it is the one hard-to-reverse action (the Linear MCP has no delete-issue tool). See Step 8.
    - **Preview** (opt-in): Runs the full analysis pipeline without prompts, then presents results for review before applying.
 
 Preview triggers: "preview", "show me first", "don't apply yet", "dry run"
@@ -227,10 +227,11 @@ Run automated sanity checks on each proposal before presenting/applying:
 #### Step 8: Approval
 
 **Auto mode:**
-1. Auto-apply all proposals that pass safety review (PASS status)
+1. Auto-apply all passing (PASS status) title/description/footer/`relatedTo` changes — but **not** sub-issue creation (see step 4)
 2. Skip any flagged proposals — do not apply them
 3. Report what was applied and what was skipped (with reasons)
-4. No user interaction at any point
+4. **Decomposition gate (always confirm, even in auto):** If any proposal decomposes an issue into sub-issues, STOP before creating them. Present the parent and the proposed child titles/scopes, then require explicit user confirmation. Sub-issue creation is hard to reverse — the Linear MCP has no delete-issue tool, so undoing means manually canceling orphans others may already have picked up. If the user confirms, create the sub-issues (Step 9); if they decline, skip decomposition and report it as deferred. All other changes still apply automatically.
+5. No user interaction at any point **except the decomposition gate in step 4**
 
 **Preview mode:**
 1. Present the unified change plan with safety status per issue
@@ -245,7 +246,7 @@ Run automated sanity checks on each proposal before presenting/applying:
 For each approved issue:
 1. **Skip unchanged issues** — if an issue has no content changes (title and description identical to current), do NOT call `Linear:save_issue`. Report it as skipped.
 2. For issues with content changes, apply the new title and/or description, then stamp the content-hash footer using the save-then-rehash sequence in the Enhancement Footer section.
-3. If decomposing: create sub-issues with `Linear:save_issue` (no `id`, with `parentId`), then update the parent description with `Linear:save_issue` (with `id`)
+3. If decomposing: **only after the user has explicitly confirmed the decomposition** (the Step 8 decomposition gate — required in both auto and preview modes). Then create sub-issues with `Linear:save_issue` (no `id`, with `parentId`), then update the parent description with `Linear:save_issue` (with `id`). If decomposition was not confirmed, skip sub-issue creation and report it as deferred.
 4. If linking related issues: call `Linear:save_issue` with the issue `id` and `relatedTo`
 5. Confirm what was changed
 
