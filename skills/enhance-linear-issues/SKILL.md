@@ -147,7 +147,7 @@ Choose a processing strategy based on batch size:
    - Dynamic context: workspace slug, repo browse URL (cwd repo, plus any project→repo mapping — see Step 2C), team list, project list, full batch issue list
    - The shared related-issue candidate pool from step 1
    - The absolute path to this skill file, with an instruction to read it once for the static instructions (step 4) — do **NOT** embed those sections in the prompt
-4. **Each sub-task reads the static instruction block once** from this `SKILL.md` instead of receiving it inline. The orchestrator passes the absolute path to this skill file (it was loaded from that path; when developing in the skill's source repo it also resolves via `Glob("**/enhance-linear-issues/SKILL.md")`). The sub-task Reads it a single time, then follows the **Enhancement Process, Enhancement Calibration, Decomposition Criteria, Guard Rails, Linking Rules, Enhancement Footer, and Output Format** sections. It is proposal-only: process every issue in its chunk and return one Output-Format proposal per issue — do NOT apply changes (the orchestrator applies them in Phase 2).
+4. **Each sub-task reads the static instruction block once** from this `SKILL.md` instead of receiving it inline. The orchestrator passes the absolute path to this skill file (it was loaded from that path; when developing in the skill's source repo it also resolves via `Glob("**/enhance-linear-issues/SKILL.md")`). The sub-task Reads it a single time, then follows the **Enhancement Process, Enhancement Calibration, Decomposition Criteria, Guard Rails, Linking Rules, Enhancement Footer, and Output Format** sections. It is proposal-only: process every issue in its chunk and return one Output-Format proposal per issue — do NOT apply changes (the orchestrator applies them in Phase 2). **Read before drafting:** within each sub-task, fetch and read every issue's full description and comments (Enhancement Process steps 1–2) before drafting that issue's proposal — never draft from the title or the batch issue-list alone (see Guard Rails).
 
 ### Enhancement Process
 
@@ -167,7 +167,7 @@ For each issue (whether processed inline or via sub-task):
    - Verify all code references before citing them. Verification (grep/ls) runs against the cwd repo, so it is only valid for issues whose code lives there; for an issue in a different repo (multi-project batch — see Step 2C), do not cite unverified code references
 7. Evaluate whether this issue should be decomposed (see Decomposition Criteria below)
 8. Check if the issue's team assignment makes sense given available teams
-9. Draft enhanced title and description (calibrated to quality gap)
+9. Draft enhanced title and description (calibrated to quality gap) — only after steps 1–2 (reading the full description and comments) are complete; never draft from the title alone (see Guard Rails)
 10. Run safety checks (see Safety Review section)
 11. Return results in the Output Format specified below
 
@@ -275,6 +275,7 @@ For each approved issue:
 6. **Assume vagueness is error** — Sometimes flexibility is intentional
 7. **Auto-assign to individuals** — We lack workload knowledge; only recommend team reassignment
 8. **Nest sub-issues** — Don't decompose issues that are already sub-issues without strong justification
+9. **Draft from titles alone** — Never draft, enhance, or `save_issue` for an issue before you have fetched and read its full description AND comments (Enhancement Process steps 1–2). Drafting from titles is the skill's most damaging historical failure (the SML-1505 batch: a verified bug was rewritten into an invented feature, then every original had to be restored). In the large-batch sub-task path (Step 5), each issue's body must be read before its proposal is drafted — never enhance from the title or the batch issue-list summary alone.
 
 ### DO:
 
