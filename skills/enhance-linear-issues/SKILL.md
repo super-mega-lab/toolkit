@@ -83,8 +83,11 @@ The single-vs-multi decision follows the request *form* (a specific issue ID/URL
 **Linear MCP availability:** The skill cannot run without the Linear MCP server. Whichever Linear call runs first — the Step 2A issue fetch (`Linear:get_issue`/`Linear:list_issues`) or, for multi-issue runs, `Linear:list_teams` — serves as the availability check. If it fails, stop with: "Linear MCP server is required but not available. Ensure the Linear MCP server is configured in your agent's MCP settings."
 
 **C. Discover git/repo context** (run in the shell):
-- Construct `REPO_BROWSE_URL` from `git remote get-url origin` and current branch: `{https-base}/blob/{branch}`
+- Construct `REPO_BROWSE_URL` from `git remote get-url origin` and current branch: `{https-base}/blob/{branch}`. This describes **only the repo checked out at the current working directory**; code-reference verification (the grep/ls in the Enhancement Process) can likewise only inspect that one repo.
 - If git commands fail, set `REPO_BROWSE_URL` to empty and note file linking is unavailable
+- **Multi-project batches (per-issue repo scope):** because `REPO_BROWSE_URL` is a single cwd value, file links and code-reference verification are only valid for issues whose code lives in the cwd repo. A single-project run (every issue maps to the cwd repo) is unaffected — skip the rest of this bullet. When a batch spans projects backed by **different** repos:
+  - If the run provides an explicit project→repo mapping (e.g. the user names a browse URL and/or local checkout path per project), record `REPO_BROWSE_URL` per project and use that issue's mapped URL for its file links; only verify code references against a repo you can actually access locally.
+  - Otherwise, treat the cwd repo as the only one you can link or verify. For issues **not** in the cwd repo, do not emit file links or code references — fall back to plain text (see Linking Rules) and write "needs investigation" instead of an unverified or wrong-repo link.
 
 **D. Discover workspace slug:**
 - Extract `WORKSPACE_SLUG` from any issue's `url` field (e.g., `https://linear.app/{WORKSPACE_SLUG}/issue/...`). If unavailable, fall back to plain text identifiers.
@@ -141,7 +144,7 @@ Choose a processing strategy based on batch size:
 2. **Chunk the issues** into groups of about 5 (tune lower for long or complex descriptions). Each chunk becomes one sub-task; ~5 balances context isolation against the per-sub-task fixed cost of reading the static block.
 3. **Dispatch one sub-task per chunk** (in parallel where possible). Each sub-task prompt contains only:
    - The chunk's issue IDs
-   - Dynamic context: workspace slug, repo browse URL, team list, project list, full batch issue list
+   - Dynamic context: workspace slug, repo browse URL (cwd repo, plus any project→repo mapping — see Step 2C), team list, project list, full batch issue list
    - The shared related-issue candidate pool from step 1
    - The absolute path to this skill file, with an instruction to read it once for the static instructions (step 4) — do **NOT** embed those sections in the prompt
 4. **Each sub-task reads the static instruction block once** from this `SKILL.md` instead of receiving it inline. The orchestrator passes the absolute path to this skill file (it was loaded from that path; when developing in the skill's source repo it also resolves via `Glob("**/enhance-linear-issues/SKILL.md")`). The sub-task Reads it a single time, then follows the **Enhancement Process, Enhancement Calibration, Decomposition Criteria, Guard Rails, Linking Rules, Enhancement Footer, and Output Format** sections. It is proposal-only: process every issue in its chunk and return one Output-Format proposal per issue — do NOT apply changes (the orchestrator applies them in Phase 2).
@@ -161,7 +164,7 @@ For each issue (whether processed inline or via sub-task):
    - Search for related issues among other issue IDs in the batch
    - Search for related issues via `Linear:list_issues` with similar terms. **If a shared related-issue candidate pool was provided for this batch (large-batch sub-tasks — see Step 5), match against that pool instead of issuing your own `Linear:list_issues` search.**
    - If issue mentions a feature/bug area, check project documentation and relevant source files
-   - Verify all code references before citing them
+   - Verify all code references before citing them. Verification (grep/ls) runs against the cwd repo, so it is only valid for issues whose code lives there; for an issue in a different repo (multi-project batch — see Step 2C), do not cite unverified code references
 7. Evaluate whether this issue should be decomposed (see Decomposition Criteria below)
 8. Check if the issue's team assignment makes sense given available teams
 9. Draft enhanced title and description (calibrated to quality gap)
@@ -172,9 +175,9 @@ For each issue (whether processed inline or via sub-task):
 
 Use these URL patterns for all references in descriptions:
 - **Issues**: `https://linear.app/WORKSPACE_SLUG/issue/ISSUE-ID` — WORKSPACE_SLUG: [dynamic]
-- **Source files**: `REPO_BROWSE_URL/file#Lstart-Lend` — REPO_BROWSE_URL: [dynamic]
+- **Source files**: `REPO_BROWSE_URL/file#Lstart-Lend` — REPO_BROWSE_URL: [dynamic]. Use the browse URL for the issue's **own** repo: the cwd `REPO_BROWSE_URL` for issues in the cwd repo, or the project-mapped URL when one was provided (Step 2C). For an issue whose repo is neither the cwd repo nor mapped, omit the file link.
 - **Documents**: `REPO_BROWSE_URL/path/to/document`
-- If slugs/URLs are unavailable, fall back to plain text
+- If slugs/URLs are unavailable, or an issue's repo can't be resolved, fall back to plain text
 
 #### Enhancement Footer
 
@@ -280,7 +283,7 @@ For each approved issue:
 3. **Describe screenshots** — "Screenshot shows: repeated text in grouping expansion for segment S-14"
 4. **Link related issues** — If you find related issues, add them via `relatedTo`
 5. **Add enhancement footer to changed issues** — For issues with content changes, append `_Last enhanced: v[VERSION], [TIMESTAMP], [HASH]_` (see Enhancement Footer); replace any existing footer; never duplicate. Never write a footer to an unchanged issue
-6. **Cite specific code as links** — Use REPO_BROWSE_URL for file:line references, but ONLY if verified
+6. **Cite specific code as links** — Use the issue's own `REPO_BROWSE_URL` for file:line references, but ONLY if verified against that repo (for multi-project batches, see Step 2C)
 7. **Recommend team changes** — When an issue clearly belongs on a different team, say so with reasoning
 
 ## Output Format
