@@ -175,14 +175,15 @@ For issues that DO change, the footer carries a content hash so re-runs can reli
 
     _Last enhanced: v[VERSION], [ISO-8601-TIMESTAMP], [HASH]_
 
-Example: `_Last enhanced: v3, 2024-01-15T12:00:00Z, a1b2c3d4e5f6_`
+Example: `_Last enhanced: v3, 2024-01-15T14:37:52Z, a1b2c3d4e5f6_`
 
 `[HASH]` is the first 12 hex characters of the SHA-256 of the **stored** description with the footer line removed. Because Linear rewrites markdown on save (e.g., `_x_` → `*x*`), the hash MUST be computed over the post-save form. This requires a save-then-rehash sequence for each changed issue:
 
 1. Save the enhanced description **without** a footer: `Linear:save_issue(id, description=<enhanced body>)`.
 2. Re-fetch with `Linear:get_issue` to read the normalized stored description.
 3. Hash that normalized description (it has no footer yet) deterministically in the shell — never estimate it. For example, write it to a temp file and run `sha256sum <file> | cut -c1-12`.
-4. Append the footer and save once more: `Linear:save_issue(id, description=<normalized body> + "\n\n" + "_Last enhanced: v[VERSION], [UTC-TIMESTAMP], [HASH]_")`.
+4. **Get the current UTC time from the shell — required.** Run `date -u +'%Y-%m-%dT%H:%M:%SZ'` and use its exact output as `[UTC-TIMESTAMP]`. Never infer, round, or hand-write the timestamp: a fabricated value like a rounded `...T00:00:00Z` misrepresents when the run happened. Treat the timestamp with the same rigor as the hash in step 3 — both come from the shell, neither is estimated. (A genuine `date -u` result that happens to land on a round time is fine; the prohibition is on fabricating or rounding, not on real values.)
+5. Append the footer and save once more, using the exact timestamp from step 4 and hash from step 3: `Linear:save_issue(id, description=<normalized body> + "\n\n" + "_Last enhanced: v[VERSION], [UTC-TIMESTAMP], [HASH]_")`.
 
 On a later run, Step 4 strips this footer, hashes the remaining (already-normalized) body, and gets the same hash — so an unchanged issue is skipped.
 
@@ -190,7 +191,7 @@ Rules:
 - Match **both** `_Last enhanced: ..._` and `*Last enhanced: ...*` when detecting or replacing an existing footer (never duplicate).
 - When stripping the footer to compute or compare a hash, remove the footer line and any trailing blank lines so the hashed body is stable across runs.
 - Remove any old-format blocks (`<enhance-linear-issues>`, `<EnhanceLinearSkills>`) and any legacy v2 footer (`_Last enhanced: v2, [timestamp]_`, no hash) during enhancement.
-- Use the current version number and UTC timestamp.
+- Use the current version number and a real UTC timestamp captured via `date -u` (step 4 of the save-then-rehash sequence above) — never infer or round it.
 
 ### Phase 2 — Review and Apply
 
