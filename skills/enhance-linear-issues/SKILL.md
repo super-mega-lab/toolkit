@@ -135,13 +135,16 @@ Choose a processing strategy based on batch size:
 
 **Small batches (≤10 issues):** Process each issue sequentially in the current agent using the Enhancement Process below. Context (tools, calibration criteria, workspace info) loads once and is reused across all issues.
 
-**Large batches (>10 issues):** Dispatch a separate parallel sub-task for each issue to prevent context degradation. Each sub-task prompt must include:
-- The issue ID and the Enhancement Process steps below
-- The full Enhancement Calibration and Decomposition Criteria sections from this skill
-- The Guard Rails, Linking Rules, and Enhancement Footer sections
-- Dynamic context: workspace slug, repo browse URL, team list, project list, batch issue list
+**Large batches (>10 issues):** Process in sub-tasks to prevent context degradation, but **batch several issues per sub-task — do NOT dispatch one sub-task per issue.** One-per-issue re-sends the entire static instruction block (Enhancement Process, Calibration, Decomposition, Guard Rails, Linking, Footer — ~250 lines) and re-runs the fuzzy related-issue search once per issue, which multiplies input tokens at 20–30 issues. Instead:
 
-Launch sub-tasks in parallel where possible.
+1. **Run one shared related-issue search for the whole batch.** Collect candidate terms from every batch issue (titles, key nouns, feature/bug areas), issue a single combined `Linear:list_issues` pass (paginate as needed), and dedup into one candidate pool of `{id, title}` (plus the batch's own issue IDs). This replaces each sub-task independently calling `Linear:list_issues`.
+2. **Chunk the issues** into groups of about 5 (tune lower for long or complex descriptions). Each chunk becomes one sub-task; ~5 balances context isolation against the per-sub-task fixed cost of reading the static block.
+3. **Dispatch one sub-task per chunk** (in parallel where possible). Each sub-task prompt contains only:
+   - The chunk's issue IDs
+   - Dynamic context: workspace slug, repo browse URL, team list, project list, full batch issue list
+   - The shared related-issue candidate pool from step 1
+   - The absolute path to this skill file, with an instruction to read it once for the static instructions (step 4) — do **NOT** embed those sections in the prompt
+4. **Each sub-task reads the static instruction block once** from this `SKILL.md` instead of receiving it inline. The orchestrator passes the absolute path to this skill file (it was loaded from that path; when developing in the skill's source repo it also resolves via `Glob("**/enhance-linear-issues/SKILL.md")`). The sub-task Reads it a single time, then follows the **Enhancement Process, Enhancement Calibration, Decomposition Criteria, Guard Rails, Linking Rules, Enhancement Footer, and Output Format** sections. It is proposal-only: process every issue in its chunk and return one Output-Format proposal per issue — do NOT apply changes (the orchestrator applies them in Phase 2).
 
 ### Enhancement Process
 
@@ -156,7 +159,7 @@ For each issue (whether processed inline or via sub-task):
    - If issue has images in description, use `Linear:extract_images` to view them, then describe what they show
    - If screenshot analysis fails, note "Screenshot attached (not analyzed)" — do NOT guess content
    - Search for related issues among other issue IDs in the batch
-   - Search for related issues via `Linear:list_issues` with similar terms
+   - Search for related issues via `Linear:list_issues` with similar terms. **If a shared related-issue candidate pool was provided for this batch (large-batch sub-tasks — see Step 5), match against that pool instead of issuing your own `Linear:list_issues` search.**
    - If issue mentions a feature/bug area, check project documentation and relevant source files
    - Verify all code references before citing them
 7. Evaluate whether this issue should be decomposed (see Decomposition Criteria below)
