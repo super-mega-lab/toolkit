@@ -72,9 +72,15 @@ If mode is ambiguous, default to auto.
 
 If `Linear:list_issues` returns paginated results, fetch all pages to build the complete issue set before proceeding.
 
-**B. Discover workspace context:**
-- `Linear:list_teams` — fetch all teams (for team reassignment). If this call fails, stop with: "Linear MCP server is required but not available. Ensure the Linear MCP server is configured in your agent's MCP settings."
-- `Linear:list_projects` — fetch all projects (for context and linking)
+**B. Discover workspace context** — gate to the scope of the request:
+- **Multi-issue or organize/triage requests** (filter-based runs, batches, or asks like "organize my backlog", "triage these", "reassign to the right teams"): load the full workspace so team reassignment and cross-project linking have the data they need.
+  - `Linear:list_teams` — fetch all teams (for team reassignment)
+  - `Linear:list_projects` — fetch all projects (for context and linking)
+- **Single targeted issue** (one specific issue named by ID/URL, e.g. "clean up TEAM-123"): **skip** the full-workspace load. Use only that issue's own team/project, already returned by the Step 2A `Linear:get_issue` call. Team reassignment and decomposition rarely apply to a single targeted fix, so fetching every team and project (~11–12 KB each) is wasted. If mid-run you find that team reassignment or cross-project linking is genuinely warranted, fetch `Linear:list_teams`/`Linear:list_projects` on demand at that point.
+
+The single-vs-multi decision follows the request *form* (a specific issue ID/URL vs. a filter/triage ask), so it does not depend on Step 2A's results — the parallel fetches still run together.
+
+**Linear MCP availability:** The skill cannot run without the Linear MCP server. Whichever Linear call runs first — the Step 2A issue fetch (`Linear:get_issue`/`Linear:list_issues`) or, for multi-issue runs, `Linear:list_teams` — serves as the availability check. If it fails, stop with: "Linear MCP server is required but not available. Ensure the Linear MCP server is configured in your agent's MCP settings."
 
 **C. Discover git/repo context** (run in the shell):
 - Construct `REPO_BROWSE_URL` from `git remote get-url origin` and current branch: `{https-base}/blob/{branch}`
@@ -95,8 +101,8 @@ Enhancing the following issues:
 - TEAM-102: [title] (status: [status], team: [team])
 - TEAM-103: [title] (status: [status], team: [team])
 
-Available teams: [team1, team2, ...]
-Available projects: [project1, project2, ...]
+Available teams: [full workspace list, or just the issue's own team for a single-issue run]
+Available projects: [full workspace list, or just the issue's own project for a single-issue run]
 Repo: [REPO_BROWSE_URL or "unavailable"]
 Workspace: [WORKSPACE_SLUG or "unavailable"]
 ```
