@@ -5,7 +5,7 @@ description: Use when asked to review, enhance, improve, clean up, decompose, or
 
 # Enhance Linear Issues
 
-**Version: 2** — This is the single source of truth for the skill version. All version references below mean this value.
+**Version: 3** — This is the single source of truth for the skill version. All version references below mean this value.
 
 ## Overview
 
@@ -109,10 +109,17 @@ Display scope summary and proceed to analysis.
 
 #### Step 4: Filter Already-Processed Issues
 
-Before processing, check each issue's description for `_Last enhanced: v[current version],`:
-- If the version matches **AND** the issue's `updatedAt` timestamp is within ~1 minute of the footer timestamp → **skip** this issue
-- Report: "Already processed by current version, no changes since last run"
-- Otherwise → proceed to Step 5
+Before processing, check each issue's description for an enhancement footer. Linear normalizes underscores to asterisks on save, so the stored footer may be `_Last enhanced: ..._` **or** `*Last enhanced: ...*` — match **both** forms. The footer format is `Last enhanced: v[version], [timestamp], [hash]` (see Enhancement Footer).
+
+For each issue:
+1. **No footer, or footer version ≠ current version** → proceed to Step 5 (process normally).
+2. **Footer present with the current version** → recompute the content hash and compare:
+   - Strip the footer line (and any trailing blank lines) from the description.
+   - Hash the remaining description with the exact method in the Enhancement Footer section (SHA-256, first 12 hex chars, computed in the shell — never estimate the hash).
+   - **Hashes equal** → **skip** this issue. Report: "Already processed by v[version], no content changes since last run."
+   - **Hashes differ** → the description changed since the last enhancement → proceed to Step 5.
+
+Do **NOT** use `updatedAt` for dedup: creating a comment bumps `issue.updatedAt` even when the description is unchanged, so a timestamp check would needlessly re-enhance. The content hash is immune to markdown normalization, clock skew, and comment-driven `updatedAt` bumps.
 
 This avoids redundant processing when re-running the skill on the same batch.
 
@@ -137,7 +144,7 @@ For each issue (whether processed inline or via sub-task):
 1. Fetch the issue with `Linear:get_issue` (include relations) — reuse data from Step 2 when available
 2. Fetch comments with `Linear:list_comments`
 3. Assess issue quality using the Enhancement Calibration scale (see below)
-4. If quality is Excellent, add enhancement footer and report, but make no content changes
+4. If quality is Excellent (NoChangesNeeded), make no content changes and do **NOT** write the issue — report it as skipped. Never write an issue whose content is unchanged (see Enhancement Footer)
 5. Identify issue type (bug/feature/task)
 6. Gather context:
    - If issue has images in description, use `Linear:extract_images` to view them, then describe what they show
@@ -162,16 +169,28 @@ Use these URL patterns for all references in descriptions:
 
 #### Enhancement Footer
 
-ALWAYS append a single footer line to the description, even for NoChangesNeeded issues. Format:
+**Only changed issues get a footer. Never write an issue whose content is unchanged** — no footer-only writes, no pristine writes. If enhancement produces zero content changes (e.g., a NoChangesNeeded issue), skip the `Linear:save_issue` call entirely and report it as skipped. Re-sending a full description just to stamp a footer is wasteful and risks corrupting `<issue>` mention tags on the round-trip.
 
-    _Last enhanced: v[VERSION], [ISO-8601-TIMESTAMP]_
+For issues that DO change, the footer carries a content hash so re-runs can reliably detect "already enhanced, nothing changed." Format:
 
-Example: `_Last enhanced: v2, 2024-01-15T12:00:00Z_`
+    _Last enhanced: v[VERSION], [ISO-8601-TIMESTAMP], [HASH]_
+
+Example: `_Last enhanced: v3, 2024-01-15T12:00:00Z, a1b2c3d4e5f6_`
+
+`[HASH]` is the first 12 hex characters of the SHA-256 of the **stored** description with the footer line removed. Because Linear rewrites markdown on save (e.g., `_x_` → `*x*`), the hash MUST be computed over the post-save form. This requires a save-then-rehash sequence for each changed issue:
+
+1. Save the enhanced description **without** a footer: `Linear:save_issue(id, description=<enhanced body>)`.
+2. Re-fetch with `Linear:get_issue` to read the normalized stored description.
+3. Hash that normalized description (it has no footer yet) deterministically in the shell — never estimate it. For example, write it to a temp file and run `sha256sum <file> | cut -c1-12`.
+4. Append the footer and save once more: `Linear:save_issue(id, description=<normalized body> + "\n\n" + "_Last enhanced: v[VERSION], [UTC-TIMESTAMP], [HASH]_")`.
+
+On a later run, Step 4 strips this footer, hashes the remaining (already-normalized) body, and gets the same hash — so an unchanged issue is skipped.
 
 Rules:
-- If description already has a `_Last enhanced:` line, replace it (never duplicate)
-- Remove any old-format blocks (`<enhance-linear-issues>`, `<EnhanceLinearSkills>`) during enhancement
-- Use the current version number and UTC timestamp
+- Match **both** `_Last enhanced: ..._` and `*Last enhanced: ...*` when detecting or replacing an existing footer (never duplicate).
+- When stripping the footer to compute or compare a hash, remove the footer line and any trailing blank lines so the hashed body is stable across runs.
+- Remove any old-format blocks (`<enhance-linear-issues>`, `<EnhanceLinearSkills>`) and any legacy v2 footer (`_Last enhanced: v2, [timestamp]_`, no hash) during enhancement.
+- Use the current version number and UTC timestamp.
 
 ### Phase 2 — Review and Apply
 
@@ -224,10 +243,11 @@ Run automated sanity checks on each proposal before presenting/applying:
 #### Step 9: Apply Changes
 
 For each approved issue:
-1. Call `Linear:save_issue` with the issue `id` and new title and/or description
-2. If decomposing: create sub-issues with `Linear:save_issue` (no `id`, with `parentId`), then update the parent description with `Linear:save_issue` (with `id`)
-3. If linking related issues: call `Linear:save_issue` with the issue `id` and `relatedTo`
-4. Confirm what was changed
+1. **Skip unchanged issues** — if an issue has no content changes (title and description identical to current), do NOT call `Linear:save_issue`. Report it as skipped.
+2. For issues with content changes, apply the new title and/or description, then stamp the content-hash footer using the save-then-rehash sequence in the Enhancement Footer section.
+3. If decomposing: create sub-issues with `Linear:save_issue` (no `id`, with `parentId`), then update the parent description with `Linear:save_issue` (with `id`)
+4. If linking related issues: call `Linear:save_issue` with the issue `id` and `relatedTo`
+5. Confirm what was changed
 
 **Error recovery:** If `Linear:save_issue` fails for an issue, log the error, continue with remaining issues, and report failures in the summary. Never stop the entire batch for a single failure.
 
@@ -250,7 +270,7 @@ For each approved issue:
 2. **Add structure** — Headers make long descriptions scannable
 3. **Describe screenshots** — "Screenshot shows: repeated text in grouping expansion for segment S-14"
 4. **Link related issues** — If you find related issues, add them via `relatedTo`
-5. **Add enhancement footer** — Always append `_Last enhanced: v[VERSION], [TIMESTAMP]_`; replace existing; never duplicate
+5. **Add enhancement footer to changed issues** — For issues with content changes, append `_Last enhanced: v[VERSION], [TIMESTAMP], [HASH]_` (see Enhancement Footer); replace any existing footer; never duplicate. Never write a footer to an unchanged issue
 6. **Cite specific code as links** — Use REPO_BROWSE_URL for file:line references, but ONLY if verified
 7. **Recommend team changes** — When an issue clearly belongs on a different team, say so with reasoning
 
@@ -326,7 +346,7 @@ Appropriate: Fix typos. Light restructure with headers IF it helps readability. 
 
 Before: Structured with Problem, Root Cause, Solution, Tasks, References sections. Includes exact error codes, code snippets, and documentation links.
 
-Appropriate: Add enhancement footer only. No content changes. Note in report why: "Already excellent — structured with problem/cause/solution, includes code examples and references."
+Appropriate: Make no changes and do NOT write the issue (no footer). Report why: "Already excellent — structured with problem/cause/solution, includes code examples and references. Skipped (no content changes)."
 
 ## Decomposition Criteria
 
