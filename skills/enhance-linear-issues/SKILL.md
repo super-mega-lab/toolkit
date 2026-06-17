@@ -210,13 +210,11 @@ After all issues are processed, collect the proposals and present a **unified ch
 
 #### Step 7: Safety Review
 
-Run automated sanity checks on each proposal before presenting/applying:
+Run automated sanity checks on each proposal before presenting/applying. These checks guard against **losing information**, not against change itself: intentional shortening (cutting filler) and title rewrites are exactly the high-value edits this skill exists to make, so they are NOT flagged as long as the original's high-value tokens survive in the proposal.
 
 | Check | Fail Condition | Action |
 |-------|---------------|--------|
-| Description shrinkage | Proposed description >20% shorter than original | FLAG |
-| Title radical change | Edit distance >50% of original title length | FLAG |
-| Data loss | Screenshots/links in original but missing in proposal | FLAG |
+| Token loss | A high-value token present in the original (title or description) is missing from the proposal — a link/URL, image or screenshot reference, issue ID (e.g. `SML-123`), or verified code reference (file:line or source link) | FLAG |
 | Invalid team | Team reassignment to non-existent team | FLAG |
 | Orphaned sub-issues | Decomposition creates children without updating parent description | FLAG |
 | Circular relations | `relatedTo` would create self-reference | FLAG |
