@@ -29,8 +29,7 @@ Load all needed tools with a single ToolSearch call: `+linear`. Tools used by th
 - `get_issue` — get issue details (supports `includeRelations`)
 - `list_comments` — get issue comments
 - `extract_images` — extract and view images from issue descriptions
-- `update_issue` — update issue fields
-- `create_issue` — create new issues (for decomposition)
+- `save_issue` — create or update issues (updates when an `id` is passed, creates when omitted; used for field updates and sub-issue creation)
 
 ## Workflow
 
@@ -225,12 +224,12 @@ Run automated sanity checks on each proposal before presenting/applying:
 #### Step 9: Apply Changes
 
 For each approved issue:
-1. Call `Linear:update_issue` with new title and/or description
-2. If decomposing: create sub-issues with `Linear:create_issue` using `parentId`, then update parent description
-3. If linking related issues: call `Linear:update_issue` with `relatedTo`
+1. Call `Linear:save_issue` with the issue `id` and new title and/or description
+2. If decomposing: create sub-issues with `Linear:save_issue` (no `id`, with `parentId`), then update the parent description with `Linear:save_issue` (with `id`)
+3. If linking related issues: call `Linear:save_issue` with the issue `id` and `relatedTo`
 4. Confirm what was changed
 
-**Error recovery:** If `Linear:update_issue` fails for an issue, log the error, continue with remaining issues, and report failures in the summary. Never stop the entire batch for a single failure.
+**Error recovery:** If `Linear:save_issue` fails for an issue, log the error, continue with remaining issues, and report failures in the summary. Never stop the entire batch for a single failure.
 
 ## Guard Rails
 
