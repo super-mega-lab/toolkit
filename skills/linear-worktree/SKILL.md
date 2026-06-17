@@ -181,7 +181,7 @@ After successfully creating the worktree, update the Linear issue status to "In 
 
 1. List the team's workflow states with `Linear:list_issue_statuses` to find the "In Progress" (or equivalent) state ID
 2. If the issue is already "In Progress" or further along (e.g., "In Review"), do not change the status
-3. Otherwise, call `Linear:update_issue` with the issue ID and the "In Progress" state ID
+3. Otherwise, call `Linear:save_issue` with the issue ID and the "In Progress" state ID
 
 ## Error Handling
 
